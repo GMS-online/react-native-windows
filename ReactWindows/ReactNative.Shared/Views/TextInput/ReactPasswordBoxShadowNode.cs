@@ -1,4 +1,4 @@
-using Facebook.Yoga;
+﻿using Facebook.Yoga;
 using ReactNative.Bridge;
 using ReactNative.Reflection;
 using ReactNative.UIManager;
@@ -27,10 +27,11 @@ namespace ReactNative.Views.TextInput
     /// </summary>
     public class ReactPasswordBoxShadowNode : LayoutShadowNode
     {
-        private const int Unset = -1;
-        private const int DefaultBorderWidth = 2;
-
         private static string s_passwordChar;
+
+        private const int Unset = -1;
+
+        private float[] _computedPadding;
 
         private int _letterSpacing;
 
@@ -53,9 +54,8 @@ namespace ReactNative.Views.TextInput
             SetPadding(EdgeSpacing.Top, computedPadding[1]);
             SetPadding(EdgeSpacing.Right, computedPadding[2]);
             SetPadding(EdgeSpacing.Bottom, computedPadding[3]);
-            SetBorder(EdgeSpacing.All, DefaultBorderWidth);
             MeasureFunction = (node, width, widthMode, height, heightMode) =>
-                MeasurePasswordBox(this, node, width, widthMode, height, heightMode);
+                MeasureTextInput(this, node, width, widthMode, height, heightMode);
         }
 
         /// <summary>
@@ -171,11 +171,10 @@ namespace ReactNative.Views.TextInput
         {
             base.OnCollectExtraUpdates(uiViewOperationQueue);
 
-            var computedPadding = GetComputedPadding();
-
-            if (computedPadding != null)
+            if (_computedPadding != null)
             {
-                uiViewOperationQueue.EnqueueUpdateExtraData(ReactTag, computedPadding);
+                uiViewOperationQueue.EnqueueUpdateExtraData(ReactTag, _computedPadding);
+                _computedPadding = null;
             }
         }
 
@@ -204,38 +203,67 @@ namespace ReactNative.Views.TextInput
         {
             return new float[]
             {
-                GetPadding(YogaEdge.Left),
-                GetPadding(YogaEdge.Top),
-                GetPadding(YogaEdge.Right),
-                GetPadding(YogaEdge.Bottom),
+                GetPadding(EdgeSpacing.Left),
+                GetPadding(EdgeSpacing.Top),
+                GetPadding(EdgeSpacing.Right),
+                GetPadding(EdgeSpacing.Bottom),
             };
         }
 
-        private static YogaSize MeasurePasswordBox(ReactPasswordBoxShadowNode textInputNode, YogaNode node, float width, YogaMeasureMode widthMode, float height, YogaMeasureMode heightMode)
+        private static YogaSize MeasureTextInput(ReactPasswordBoxShadowNode textInputNode, YogaNode node, float width, YogaMeasureMode widthMode, float height, YogaMeasureMode heightMode)
         {
+            textInputNode._computedPadding = textInputNode.GetComputedPadding();
+
+            var borderLeftWidth = textInputNode.GetBorder(EdgeSpacing.Left);
+            var borderRightWidth = textInputNode.GetBorder(EdgeSpacing.Right);
+
             var normalizedWidth = Math.Max(0,
-                (YogaConstants.IsUndefined(width) ? double.PositiveInfinity : width));
+                (YogaConstants.IsUndefined(width) ? double.PositiveInfinity : width)
+                - textInputNode._computedPadding[0]
+                - textInputNode._computedPadding[2]
+                - (YogaConstants.IsUndefined(borderLeftWidth) ? 0 : borderLeftWidth)
+                - (YogaConstants.IsUndefined(borderRightWidth) ? 0 : borderRightWidth));
+            var normalizedHeight = Math.Max(0, YogaConstants.IsUndefined(height) ? double.PositiveInfinity : height);
 
-            var normalizedHeight = Math.Max(0,
-                (YogaConstants.IsUndefined(height) ? double.PositiveInfinity : height));
-
-            var passwordChar = GetDefaultPasswordChar();
-            var normalizedText = !string.IsNullOrEmpty(textInputNode._text)
-                ? new string(passwordChar[0], textInputNode._text.Length)
-                : passwordChar;
-
-            var textBlock = new TextBlock
+            // This is not a terribly efficient way of projecting the height of
+            // the text elements. It requires that we have access to the
+            // dispatcher in order to do measurement, which, for obvious
+            // reasons, can cause perceived performance issues as it will block
+            // the UI thread from handling other work.
+            //
+            // TODO: determine another way to measure text elements.
+            var task = DispatcherHelpers.CallOnDispatcher(() =>
             {
-                Text = normalizedText,
-            };
+                var textBlock = new TextBlock
+                {
+                    TextWrapping = TextWrapping.Wrap,
+                };
 
-            ApplyStyles(textInputNode, textBlock);
+                var passwordChar = GetDefaultPasswordChar();
+                var normalizedText = !string.IsNullOrEmpty(textInputNode._text)
+                    ? new string(passwordChar[0], textInputNode._text.Length)
+                    : passwordChar;
+                var inline = new Run { Text = normalizedText };
+                FormatTextElement(textInputNode, inline);
+                textBlock.Inlines.Add(inline);
 
-            textBlock.Measure(new Size(normalizedWidth, normalizedHeight));
+                textBlock.Measure(new Size(normalizedWidth, normalizedHeight));
 
-            return MeasureOutput.Make(
-                (float)Math.Ceiling(width),
-                (float)Math.Ceiling(textBlock.ActualHeight));
+                var borderTopWidth = textInputNode.GetBorder(EdgeSpacing.Top);
+                var borderBottomWidth = textInputNode.GetBorder(EdgeSpacing.Bottom);
+
+                var finalizedHeight = (float)textBlock.DesiredSize.Height;
+                finalizedHeight += textInputNode._computedPadding[1];
+                finalizedHeight += textInputNode._computedPadding[3];
+                finalizedHeight += YogaConstants.IsUndefined(borderTopWidth) ? 0 : borderTopWidth;
+                finalizedHeight += YogaConstants.IsUndefined(borderBottomWidth) ? 0 : borderBottomWidth;
+
+                return MeasureOutput.Make(
+                    (float)Math.Ceiling(width), 
+                    (float)Math.Ceiling(finalizedHeight));
+            });
+
+            return task.Result;
         }
 
         private static string GetDefaultPasswordChar()
@@ -249,7 +277,7 @@ namespace ReactNative.Views.TextInput
             return s_passwordChar;
         }
 
-        private static void ApplyStyles(ReactPasswordBoxShadowNode textNode, TextBlock inline)
+        private static void FormatTextElement(ReactPasswordBoxShadowNode textNode, TextElement inline)
         {
             if (textNode._fontSize != Unset)
             {

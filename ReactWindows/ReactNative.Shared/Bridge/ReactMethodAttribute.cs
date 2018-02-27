@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace ReactNative.Bridge
 {
@@ -9,5 +9,8 @@ namespace ReactNative.Bridge
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class ReactMethodAttribute : Attribute
     {
+        public bool IsBlockingSynchronousMethod { get; set; } = false;
+
+        public bool IsDirectCallMethod { get; set; } = false;
     }
 }

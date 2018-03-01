@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using ReactNative.Bridge;
@@ -271,6 +271,11 @@ namespace ReactNative.Tests.Bridge
             public void Invoke(int moduleId, int methodId, JArray parameters)
             {
                 _invoke(moduleId, methodId, parameters);
+            }
+
+            public JToken CallSerializableNativeHook(int moduleId, int methodId, JArray parameters)
+            {
+                throw new NotImplementedException();
             }
 
             public void OnBatchComplete()

@@ -134,6 +134,11 @@ namespace ReactNative.DevSupport
             }
         }
 
+        public void SetCallSerializableNativeHook(CallSerializableNativeHook callSerializableNativeHook)
+        {
+            throw new NotImplementedException();
+        }
+
         public void SetGlobalVariable(string propertyName, JToken value)
         {
             _injectedObjects.Add(propertyName, value.ToString(Formatting.None));

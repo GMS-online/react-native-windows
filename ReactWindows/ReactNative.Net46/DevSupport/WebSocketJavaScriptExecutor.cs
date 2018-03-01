@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ReactNative.Bridge;
 using ReactNative.Collections;
@@ -119,6 +119,11 @@ namespace ReactNative.DevSupport
             {
                 _callbacks.Remove(requestId);
             }
+        }
+
+        public void SetCallSerializableNativeHook(CallSerializableNativeHook callSerializableNativeHook)
+        {
+            // TODO: Add support for synchronous calls with remote JS execution
         }
 
         public void SetGlobalVariable(string propertyName, JToken value)

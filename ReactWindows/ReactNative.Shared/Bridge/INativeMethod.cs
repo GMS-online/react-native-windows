@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace ReactNative.Bridge
 {
@@ -18,5 +18,12 @@ namespace ReactNative.Bridge
         /// <param name="reactInstance">The React instance.</param>
         /// <param name="arguments">The arguments.</param>
         void Invoke(IReactInstance reactInstance, JArray arguments);
+
+        /// <summary>
+        /// Invoke the native synchronous hook.
+        /// </summary>
+        /// <param name="reactInstance">The React instance.</param>
+        /// <param name="arguments">The arguments.</param>
+        JToken CallSerializableNativeHook(IReactInstance reactInstance, JArray arguments);
     }
 }

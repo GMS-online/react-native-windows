@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Linq;
 using ReactNative.Bridge.Queue;
 using System;
 
@@ -37,6 +37,7 @@ namespace ReactNative.Bridge
             _jsExecutor = executor;
             _reactCallback = reactCallback;
             _nativeModulesQueueThread = nativeModulesQueueThread;
+            _jsExecutor.SetCallSerializableNativeHook(CallSerializableNativeHook);
         }
 
         /// <summary>
@@ -143,6 +144,11 @@ namespace ReactNative.Bridge
 
                 _reactCallback.OnBatchComplete();
             });
+        }
+
+        private JToken CallSerializableNativeHook(int moduleId, int methodId, JArray arguments)
+        {
+            return _reactCallback.CallSerializableNativeHook(moduleId, methodId, arguments);
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Linq;
 using ReactNative.Bridge;
 using System;
 
@@ -26,6 +26,10 @@ namespace ReactNative.Tests
         public void RunScript(string sourcePath, string sourceUrl)
         {
             OnRunScript(sourcePath, sourceUrl);
+        }
+
+        public void SetCallSerializableNativeHook(CallSerializableNativeHook callSerializableNativeHook)
+        {
         }
 
         public void SetGlobalVariable(string propertyName, JToken value)

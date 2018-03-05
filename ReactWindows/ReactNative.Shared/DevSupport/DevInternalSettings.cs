@@ -1,5 +1,6 @@
-﻿using ReactNative.Modules.DevSupport;
+using ReactNative.Modules.DevSupport;
 using System.Collections.Generic;
+using System.Net;
 #if WINDOWS_UWP
 using Windows.Storage;
 #else
@@ -80,6 +81,14 @@ namespace ReactNative.DevSupport
         }
 
         public bool IsElementInspectorEnabled { get; set; }
+
+        public IPAddress DeviceDebugIpAddress
+        {
+            get
+            {
+                return IPAddress.Loopback;
+            }
+        }
 
         public bool IsFpsDebugEnabled
         {

@@ -1,4 +1,6 @@
-﻿namespace ReactNative.Modules.DevSupport
+using System.Net;
+
+namespace ReactNative.Modules.DevSupport
 {
     /// <summary>
     /// Provides access to React Native developer settings.
@@ -29,5 +31,7 @@
         /// Signals whether element inspector is enabled.
         /// </summary>
         bool IsElementInspectorEnabled { get; }
+
+        IPAddress DeviceDebugIpAddress { get; } 
     }
 }

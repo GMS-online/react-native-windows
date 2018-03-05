@@ -3,7 +3,9 @@ using Newtonsoft.Json.Linq;
 using ReactNative.Bridge;
 using ReactNative.Collections;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Net;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,10 +17,14 @@ namespace ReactNative.DevSupport
     {
         private const int ConnectTimeoutMilliseconds = 5000;
         private const int ConnectRetryCount = 3;
+        private const int PrepareTimeoutMilliseconds = 2000;
+        private const int PrepareRetryCount = 3;
 
         private WebSocket _webSocket;
         private readonly JObject _injectedObjects;
         private readonly IDictionary<int, TaskCompletionSource<JToken>> _callbacks;
+        private HttpListener _nativeHookListener;
+        private CallSerializableNativeHook _callSerializableNativeHook;
 
         private bool _connected;
         private int _requestId;
@@ -27,13 +33,13 @@ namespace ReactNative.DevSupport
         public WebSocketJavaScriptExecutor()
         {
             _injectedObjects = new JObject();
-            _callbacks = new Dictionary<int, TaskCompletionSource<JToken>>();
+            _callbacks = new ConcurrentDictionary<int, TaskCompletionSource<JToken>>();
+            StartNativeHookListener();
         }
 
         public async Task ConnectAsync(string webSocketServerUrl, CancellationToken token)
         {
-            var uri = default(Uri);
-            if (!Uri.TryCreate(webSocketServerUrl, UriKind.Absolute, out uri))
+            if (!Uri.TryCreate(webSocketServerUrl, UriKind.Absolute, out var uri))
             {
                 throw new ArgumentOutOfRangeException(nameof(webSocketServerUrl), "Expected valid URI argument.");
             }

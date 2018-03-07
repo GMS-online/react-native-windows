@@ -47,7 +47,6 @@ namespace ReactNative
         // rootView parameter)
         // - The internal context initialization is heavily asynchronous, so it uses an AsyncLock to prevent concurrent initialization
         // in a non-blocking manner
-        // in a non-blocking manner
         // - The "scope" of this AsyncLock extends to the DevSupportManager as well, all the private methods involved in creating a React context
         // in any way are called with the AsyncLock held.
         //

@@ -10,11 +10,13 @@ using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
+using ReactNative.Modules.DevSupport;
 
 namespace ReactNative.DevSupport
 {
     class WebSocketJavaScriptExecutor : IJavaScriptExecutor
     {
+        private readonly IDeveloperSettings _devSettings;
         private const int ConnectTimeoutMilliseconds = 5000;
         private const int ConnectRetryCount = 3;
 
@@ -28,8 +30,9 @@ namespace ReactNative.DevSupport
         private int _requestId;
         private bool _isDisposed;
 
-        public WebSocketJavaScriptExecutor()
+        public WebSocketJavaScriptExecutor(IDeveloperSettings devSettings)
         {
+            _devSettings = devSettings;
             _webSocket = new MessageWebSocket();
             _webSocket.Control.MessageType = SocketMessageType.Utf8;
             _webSocket.MessageReceived += OnMessageReceived;

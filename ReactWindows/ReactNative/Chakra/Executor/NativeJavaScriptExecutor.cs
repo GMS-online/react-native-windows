@@ -164,7 +164,11 @@ namespace ReactNative.Chakra.Executor
             }
         }
 
-        public void SetCallSerializableNativeHook(CallSerializableNativeHook callSerializableNativeHook)
+        /// <summary>
+        /// Sets a callback for synchronous native methods.
+        /// </summary>
+        /// <param name="callSyncHook">The sync hook for native methods.</param>
+        public void SetCallSyncHook(Func<int, int, JArray, JToken> callSyncHook)
         {
             throw new NotImplementedException();
         }

@@ -8,7 +8,6 @@ using ReactNative.Common;
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text;
 using static System.FormattableString;
 
@@ -19,13 +18,6 @@ namespace ReactNative.Chakra.Executor
     /// </summary>
     public sealed class ChakraJavaScriptExecutor : IJavaScriptExecutor
     {
-        private delegate JavaScriptValue NativeHook(
-            JavaScriptContext jscontext,
-            JavaScriptValue function,
-            JavaScriptValue thisObject,
-            JavaScriptValue[] arguments,
-            ref JavaScriptException exception);
-
         private const string MagicFileName = "UNBUNDLE";
         private const uint MagicFileHeader = 0xFB0BD1E5;
 
@@ -40,14 +32,13 @@ namespace ReactNative.Chakra.Executor
 
         private JavaScriptNativeFunction _nativeLoggingHook;
         private JavaScriptNativeFunction _nativeRequire;
+        private JavaScriptNativeFunction _nativeCallSyncHook;
 
         private JavaScriptValue _globalObject;
 
         private JavaScriptValue _callFunctionAndReturnFlushedQueueFunction;
         private JavaScriptValue _invokeCallbackAndReturnFlushedQueueFunction;
         private JavaScriptValue _flushedQueueFunction;
-
-        private CallSerializableNativeHook _callSerializableNativeHook;
 
 #if !NATIVE_JSON_MARSHALING
         private JavaScriptValue _parseFunction;
@@ -159,13 +150,13 @@ namespace ReactNative.Chakra.Executor
             if (IsUnbundle(sourcePath))
             {
                 _unbundle = new FileBasedJavaScriptUnbundle(sourcePath);
-                InstallNativeHook("nativeRequire", JavaScriptValue.CreateFunction(_nativeRequire), EnsureGlobalObject());
+                InstallNativeRequire();
                 startupCode = _unbundle.GetStartupCode();
             }
             else if (IsIndexedUnbundle(sourcePath))
             {
                 _unbundle = new IndexedJavaScriptUnbundle(sourcePath);
-                InstallNativeHook("nativeRequire", JavaScriptValue.CreateFunction(_nativeRequire), EnsureGlobalObject());
+                InstallNativeRequire();
                 startupCode = _unbundle.GetStartupCode();
             }
             else
@@ -207,9 +198,13 @@ namespace ReactNative.Chakra.Executor
             return ConvertJson(EnsureGlobalObject().GetProperty(propertyId));
         }
 
-        public void SetCallSerializableNativeHook(CallSerializableNativeHook callSerializableNativeHook)
+        /// <summary>
+        /// Sets a callback for synchronous native methods.
+        /// </summary>
+        /// <param name="callSyncHook">The sync hook for native methods.</param>
+        public void SetCallSyncHook(Func<int, int, JArray, JToken> callSyncHook)
         {
-            _callSerializableNativeHook = callSerializableNativeHook;
+            InstallNativeCallSyncHook(callSyncHook);
         }
 
         /// <summary>
@@ -286,7 +281,6 @@ namespace ReactNative.Chakra.Executor
         #endregion
 
         #region Console Callbacks
-
         private JavaScriptValue NativeLoggingHook(
             JavaScriptValue callee,
             bool isConstructCall,
@@ -294,23 +288,11 @@ namespace ReactNative.Chakra.Executor
             ushort argumentCount,
             IntPtr callbackData)
         {
-            if (arguments.Length != 2)
-            {
-                Debug.WriteLine($"Wrong number of arguments for JavaScript console log. Expected 2, got {arguments.Length}");
-                return JavaScriptValue.Undefined;
-            }
-
             try
             {
-                var logLevel = (int)arguments[2].ToDouble();
-                if (logLevel > 3)
-                {
-                    Debug.WriteLine($"Invalid logLevel for JavaScript console log. Expected <3, got {logLevel}");
-                    return JavaScriptValue.Undefined;
-                }
-
                 var message = arguments[1].ToString();
-                Debug.WriteLine($"[JS {(LogLevel)logLevel}] {message}");
+                var logLevel = (LogLevel)(int)arguments[2].ToDouble();
+                Debug.WriteLine($"[JS {logLevel}] {message}");
             }
             catch
             {
@@ -321,21 +303,37 @@ namespace ReactNative.Chakra.Executor
         }
         #endregion
 
-        #region Native Hook
-
-        private static void nativeHookFinalizer(IntPtr gcHandleFromJsObject)
+        #region Native Call Sync Hook
+        private void InstallNativeCallSyncHook(Func<int, int, JArray, JToken> callSyncHook)
         {
-            var handle = GCHandle.FromIntPtr(gcHandleFromJsObject);
-            handle.Free();
-        }
+            _nativeCallSyncHook = (callee, isConstructCall, arguments, argumentCount, callbackData) =>
+            {
+                if (argumentCount != 4)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(argumentCount), "Expected exactly four arguments (global, moduleId, methodId, and args).");
+                }
 
-        private void InstallNativeHook(string jsFunctionName, JavaScriptValue nativeHook, JavaScriptValue parentObject)
-        {            
-            var nativeHookGcHandle = GCHandle.ToIntPtr(GCHandle.Alloc(nativeHook));
-            var nativeHookFunctionObject = JavaScriptValue.CreateExternalObject(nativeHookGcHandle, nativeHookFinalizer);
-            parentObject.SetProperty(
-                JavaScriptPropertyId.FromString(jsFunctionName),
-                nativeHookFunctionObject,
+                var moduleId = (int)arguments[1].ToDouble();
+                var methodId = (int)arguments[2].ToDouble();
+                var args = (JArray)ConvertJson(arguments[3]);
+                var result = callSyncHook(moduleId, methodId, args);
+                return ConvertJson(result);
+            };
+
+            EnsureGlobalObject().SetProperty(
+                JavaScriptPropertyId.FromString("nativeCallSyncHook"),
+                JavaScriptValue.CreateFunction(_nativeCallSyncHook),
+                true);
+        }
+        #endregion
+
+        #region Native Require
+        private void InstallNativeRequire()
+        {
+            _nativeRequire = NativeRequire;
+            EnsureGlobalObject().SetProperty(
+                JavaScriptPropertyId.FromString("nativeRequire"),
+                JavaScriptValue.CreateFunction(_nativeRequire),
                 true);
         }
 

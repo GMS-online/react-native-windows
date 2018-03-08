@@ -41,12 +41,12 @@ namespace ReactNative.Bridge
         /// <param name="module">The native module instance.</param>
         /// <param name="method">The method.</param>
         /// <returns>The invocation delegate.</returns>
-        public override Func<INativeModule, IReactInstance, JArray, JToken> Create(INativeModule nativeModule, MethodInfo method)
+        public override Func<IReactInstance, JArray, JToken> Create(INativeModule module, MethodInfo method)
         {
-            return GenerateExpression(nativeModule, method).Compile();
+            return GenerateExpression(module, method).Compile();
         }
 
-        private static Expression<Func<INativeModule, IReactInstance, JArray, JToken>> GenerateExpression(INativeModule module, MethodInfo method)
+        private static Expression<Func<IReactInstance, JArray, JToken>> GenerateExpression(INativeModule module, MethodInfo method)
         {
             var parameterInfos = method.GetParameters();
 
@@ -137,7 +137,7 @@ namespace ReactNative.Bridge
                 parameterExpressions);
 
             // FIXME: update for new Func<>
-            return Expression.Lambda<Func<INativeModule, IReactInstance, JArray, JToken>>(
+            return Expression.Lambda<Func<IReactInstance, JArray, JToken>>(
                 Expression.Block(parameterExpressions, blockStatements),
                 reactInstanceParameter,
                 jsArgumentsParameter

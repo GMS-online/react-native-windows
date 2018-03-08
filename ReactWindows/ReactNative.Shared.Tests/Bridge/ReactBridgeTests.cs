@@ -276,7 +276,7 @@ namespace ReactNative.Tests.Bridge
                 _invoke(moduleId, methodId, parameters);
             }
 
-            public JToken CallSerializableNativeHook(int moduleId, int methodId, JArray parameters)
+            public JToken InvokeSync(int moduleId, int methodId, JArray parameters)
             {
                 throw new NotImplementedException();
             }

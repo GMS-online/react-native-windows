@@ -45,6 +45,8 @@ namespace ReactNative.Chakra.Executor
         private JavaScriptValue _stringifyFunction;
 #endif
 
+        private Func<int, int, JArray, JToken> _callSyncHook;
+
         /// <summary>
         /// Instantiates the <see cref="ChakraJavaScriptExecutor"/>.
         /// </summary>
@@ -204,7 +206,7 @@ namespace ReactNative.Chakra.Executor
         /// <param name="callSyncHook">The sync hook for native methods.</param>
         public void SetCallSyncHook(Func<int, int, JArray, JToken> callSyncHook)
         {
-            InstallNativeCallSyncHook(callSyncHook);
+            _callSyncHook = callSyncHook;
         }
 
         /// <summary>
@@ -224,6 +226,12 @@ namespace ReactNative.Chakra.Executor
             EnsureGlobalObject().SetProperty(
                 JavaScriptPropertyId.FromString("nativeLoggingHook"),
                 JavaScriptValue.CreateFunction(_nativeLoggingHook),
+                true);
+
+            _nativeCallSyncHook = NativeCallSyncHook;
+            EnsureGlobalObject().SetProperty(
+                JavaScriptPropertyId.FromString("nativeCallSyncHook"),
+                JavaScriptValue.CreateFunction(_nativeCallSyncHook),
                 true);
         }
 
@@ -304,26 +312,28 @@ namespace ReactNative.Chakra.Executor
         #endregion
 
         #region Native Call Sync Hook
-        private void InstallNativeCallSyncHook(Func<int, int, JArray, JToken> callSyncHook)
+        private JavaScriptValue NativeCallSyncHook(
+            JavaScriptValue callee,
+            bool isConstructCall,
+            JavaScriptValue[] arguments,
+            ushort argumentCount,
+            IntPtr callbackData)
         {
-            _nativeCallSyncHook = (callee, isConstructCall, arguments, argumentCount, callbackData) =>
+            if (argumentCount != 4)
             {
-                if (argumentCount != 4)
-                {
-                    throw new ArgumentOutOfRangeException(nameof(argumentCount), "Expected exactly four arguments (global, moduleId, methodId, and args).");
-                }
+                throw new ArgumentOutOfRangeException(nameof(argumentCount), "Expected exactly four arguments (global, moduleId, methodId, and args).");
+            }
 
-                var moduleId = (int)arguments[1].ToDouble();
-                var methodId = (int)arguments[2].ToDouble();
-                var args = (JArray)ConvertJson(arguments[3]);
-                var result = callSyncHook(moduleId, methodId, args);
-                return ConvertJson(result);
-            };
+            if (_callSyncHook == null)
+            {
+                throw new InvalidOperationException("Sync hook has not been set.");
+            }
 
-            EnsureGlobalObject().SetProperty(
-                JavaScriptPropertyId.FromString("nativeCallSyncHook"),
-                JavaScriptValue.CreateFunction(_nativeCallSyncHook),
-                true);
+            var moduleId = (int)arguments[1].ToDouble();
+            var methodId = (int)arguments[2].ToDouble();
+            var args = (JArray)ConvertJson(arguments[3]);
+            var result = _callSyncHook(moduleId, methodId, args);
+            return ConvertJson(result);
         }
         #endregion
 

@@ -41,7 +41,7 @@ namespace ReactNative.Bridge
 
             return (reactInstance, arguments) => 
                 Invoke(
-                    method, 
+                    method,
                     expectedArguments,
                     extractFunctions,
                     genericDelegate,

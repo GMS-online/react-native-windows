@@ -17,6 +17,7 @@ namespace ReactNative.Bridge
     /// </summary>
     public sealed class CompiledReactDelegateFactory : ReactDelegateFactoryBase
     {
+        private static readonly ConstantExpression s_undefinedConstant = Expression.Constant(JValue.CreateUndefined(), typeof(JToken));
         private static readonly ConstructorInfo s_newArgumentNullException = (ConstructorInfo)ReflectionHelpers.InfoOf(() => new ArgumentNullException(default(string)));
         private static readonly ConstructorInfo s_newNativeArgumentParseException = (ConstructorInfo)ReflectionHelpers.InfoOf(() => new NativeArgumentsParseException(default(string), default(string)));
         private static readonly ConstructorInfo s_newNativeArgumentParseExceptionInner = (ConstructorInfo)ReflectionHelpers.InfoOf(() => new NativeArgumentsParseException(default(string), default(string), default(Exception)));
@@ -25,6 +26,7 @@ namespace ReactNative.Bridge
         private static readonly MethodInfo s_toObject = ((MethodInfo)ReflectionHelpers.InfoOf((JToken token) => token.ToObject(typeof(Type))));
         private static readonly MethodInfo s_stringFormat = (MethodInfo)ReflectionHelpers.InfoOf(() => string.Format(default(IFormatProvider), default(string), default(object)));
         private static readonly MethodInfo s_getIndex = (MethodInfo)ReflectionHelpers.InfoOf((JArray arr) => arr[0]);
+        private static readonly MethodInfo s_fromObject = (MethodInfo)ReflectionHelpers.InfoOf(() => JObject.FromObject(default(object)));
         private static readonly PropertyInfo s_countProperty = (PropertyInfo)ReflectionHelpers.InfoOf((JArray arr) => arr.Count);
 
         private CompiledReactDelegateFactory() { }
@@ -77,7 +79,8 @@ namespace ReactNative.Bridge
                     i);
             }
 
-            var blockStatements = new Expression[n + 4];
+            var hasReturnType = method.ReturnType != typeof(void);
+            var blockStatements = new Expression[n + (hasReturnType ? 4 : 5)];
 
             //
             // if (reactInstance == null)
@@ -131,12 +134,34 @@ namespace ReactNative.Bridge
             //
             Array.Copy(extractExpressions, 0, blockStatements, 3, n);
 
-            blockStatements[blockStatements.Length - 1] = Expression.Call(
+            //
+            // result = module.NativeMethod(p0, p1, ..., pn);
+            //
+            var nativeMethodCall = Expression.Call(
                 Expression.Convert(moduleInstanceConstant, method.DeclaringType),
                 method,
-                parameterExpressions);
+                parameterExpressions
+            );
 
-            // FIXME: update for new Func<>
+            if (hasReturnType)
+            {
+                //
+                // return JObject.FromObject(result);
+                //
+                blockStatements[blockStatements.Length - 1] = Expression.Call(
+                    s_fromObject,
+                    nativeMethodCall
+                );
+            }
+            else
+            {
+                //
+                // return JValue.CreateUndefined();
+                //
+                blockStatements[blockStatements.Length - 2] = nativeMethodCall;
+                blockStatements[blockStatements.Length - 1] = s_undefinedConstant;
+            }
+
             return Expression.Lambda<Func<IReactInstance, JArray, JToken>>(
                 Expression.Block(parameterExpressions, blockStatements),
                 reactInstanceParameter,

@@ -28,7 +28,6 @@ namespace ReactNative.Views.TextInput
     public class ReactTextInputShadowNode : LayoutShadowNode
     {
         private const int Unset = -1;
-        private const int DefaultBorderWidth = 2;
 
         private static readonly float[] s_defaultPaddings =
         {
@@ -38,14 +37,13 @@ namespace ReactNative.Views.TextInput
             5f,
         };
 
-        private bool _multiline;
-        private bool _autoGrow;
+        private float[] _computedPadding;
+
         private int _letterSpacing;
         private int _numberOfLines;
 
         private double _fontSize = Unset;
         private double _lineHeight;
-        private double? _maxHeight;
 
         private FontStyle? _fontStyle;
         private FontWeight? _fontWeight;
@@ -69,7 +67,6 @@ namespace ReactNative.Views.TextInput
             SetDefaultPadding(EdgeSpacing.Top, s_defaultPaddings[1]);
             SetDefaultPadding(EdgeSpacing.Right, s_defaultPaddings[2]);
             SetDefaultPadding(EdgeSpacing.Bottom, s_defaultPaddings[3]);
-            SetBorder(EdgeSpacing.All, DefaultBorderWidth);
             MeasureFunction = (node, width, widthMode, height, heightMode) => 
                 MeasureTextInput(this, node, width, widthMode, height, heightMode);
         }
@@ -170,7 +167,7 @@ namespace ReactNative.Views.TextInput
         /// </summary>
         /// <param name="lineHeight">The line height.</param>
         [ReactProp(ViewProps.LineHeight)]
-        public void SetLineHeight(double lineHeight)
+        public virtual void SetLineHeight(double lineHeight)
         {
             if (_lineHeight != lineHeight)
             {
@@ -180,62 +177,16 @@ namespace ReactNative.Views.TextInput
         }
 
         /// <summary>
-        /// Sets the max height.
-        /// </summary>
-        /// <param name="maxHeight">The max height.</param>
-        [ReactProp(ViewProps.MaxHeight)]
-        public override void SetMaxHeight(JValue maxHeight)
-        {
-            var maxHeightValue = maxHeight.Value<double?>();
-            if (_maxHeight != maxHeightValue)
-            {
-                _maxHeight = maxHeightValue;
-                MarkUpdated();
-            }
-        }
-
-        /// <summary>
         /// Sets the maximum number of lines.
         /// </summary>
         /// <param name="numberOfLines">Max number of lines.</param>
         [ReactProp(ViewProps.NumberOfLines)]
-        public void SetNumberOfLines(int numberOfLines)
+        public virtual void SetNumberOfLines(int numberOfLines)
         {
             if (_numberOfLines != numberOfLines)
             {
                 _numberOfLines = numberOfLines;
                 MarkUpdated();
-            }
-        }
-
-        /// <summary>
-        /// Sets whether to enable multiline input on the text input.
-        /// </summary>
-        /// <param name="multiline">The multiline flag.</param>
-        [ReactProp("multiline")]
-        public void SetMultiline(bool multiline)
-        {
-            if (_multiline != multiline)
-            {
-                _multiline = multiline;
-                MarkUpdated();
-            }
-        }
-
-        /// <summary>
-        /// Sets whether to enable auto-grow on the text input.
-        /// </summary>
-        /// <param name="autoGrow">The auto-grow flag.</param>
-        [ReactProp("autoGrow")]
-        public void SetAutoGrow(bool autoGrow)
-        {
-            if (_autoGrow != autoGrow)
-            {
-                _autoGrow = autoGrow;
-                if (!_autoGrow)
-                {
-                    MarkUpdated();
-                }
             }
         }
 
@@ -279,11 +230,10 @@ namespace ReactNative.Views.TextInput
         {
             base.OnCollectExtraUpdates(uiViewOperationQueue);
 
-            var computedPadding = GetComputedPadding();
-
-            if (computedPadding != null)
+            if (_computedPadding != null)
             {
-                uiViewOperationQueue.EnqueueUpdateExtraData(ReactTag, computedPadding);
+                uiViewOperationQueue.EnqueueUpdateExtraData(ReactTag, _computedPadding);
+                _computedPadding = null;
             }
 
             if (_jsEventCount != Unset)
@@ -325,58 +275,75 @@ namespace ReactNative.Views.TextInput
 
         private static YogaSize MeasureTextInput(ReactTextInputShadowNode textInputNode, YogaNode node, float width, YogaMeasureMode widthMode, float height, YogaMeasureMode heightMode)
         {
+            textInputNode._computedPadding = textInputNode.GetComputedPadding();
+
+            var borderLeftWidth = textInputNode.GetBorder(YogaEdge.Left);
+            var borderRightWidth = textInputNode.GetBorder(YogaEdge.Right);
+
             var normalizedWidth = Math.Max(0,
-                (YogaConstants.IsUndefined(width) ? double.PositiveInfinity : width));
-
-            var normalizedHeight = Math.Max(0,
-                (YogaConstants.IsUndefined(height) ? double.PositiveInfinity : height));
-
-            var normalizedText = string.IsNullOrEmpty(textInputNode._text) ? " " : textInputNode._text;
+                (YogaConstants.IsUndefined(width) ? double.PositiveInfinity : width)
+                - textInputNode._computedPadding[0]
+                - textInputNode._computedPadding[2]
+                - (YogaConstants.IsUndefined(borderLeftWidth) ? 0 : borderLeftWidth)
+                - (YogaConstants.IsUndefined(borderRightWidth) ? 0 : borderRightWidth));
+            var normalizedHeight = Math.Max(0, YogaConstants.IsUndefined(height) ? double.PositiveInfinity : height);
 
             var textBlock = new TextBlock
             {
-                Text = normalizedText,
-                TextWrapping = textInputNode._multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                TextWrapping = TextWrapping.Wrap,
             };
 
-            ApplyStyles(textInputNode, textBlock);
+            var normalizedText = string.IsNullOrEmpty(textInputNode._text) ? " " : textInputNode._text;
+            var inline = new Run { Text = normalizedText };
+            FormatInline(textInputNode, inline);
+
+            textBlock.Inlines.Add(inline);
 
             textBlock.Measure(new Size(normalizedWidth, normalizedHeight));
 
+            var borderTopWidth = textInputNode.GetBorder(YogaEdge.Top);
+            var borderBottomWidth = textInputNode.GetBorder(YogaEdge.Bottom);
+
+            var finalizedHeight = (float)textBlock.DesiredSize.Height;
+            finalizedHeight += textInputNode._computedPadding[1];
+            finalizedHeight += textInputNode._computedPadding[3];
+            finalizedHeight += YogaConstants.IsUndefined(borderTopWidth) ? 0 : borderTopWidth;
+            finalizedHeight += YogaConstants.IsUndefined(borderBottomWidth) ? 0 : borderBottomWidth;
+
             return MeasureOutput.Make(
                 (float)Math.Ceiling(width),
-                (float)Math.Ceiling(textBlock.ActualHeight));
+                (float)Math.Ceiling(finalizedHeight));
         }
 
-        private static void ApplyStyles(ReactTextInputShadowNode textNode, TextBlock textBlock)
+        /// <summary>
+        /// Formats an inline instance with shadow properties.
+        /// </summary>
+        /// <param name="textNode">The text shadow node.</param>
+        /// <param name="inline">The inline.</param>
+        protected static void FormatInline(ReactTextInputShadowNode textNode, TextElement inline)
         {
             if (textNode._fontSize != Unset)
             {
                 var fontSize = textNode._fontSize;
-                textBlock.FontSize = fontSize;
+                inline.FontSize = fontSize;
             }
 
             if (textNode._fontStyle.HasValue)
             {
                 var fontStyle = textNode._fontStyle.Value;
-                textBlock.FontStyle = fontStyle;
+                inline.FontStyle = fontStyle;
             }
 
             if (textNode._fontWeight.HasValue)
             {
                 var fontWeight = textNode._fontWeight.Value;
-                textBlock.FontWeight = fontWeight;
+                inline.FontWeight = fontWeight;
             }
 
             if (textNode._fontFamily != null)
             {
                 var fontFamily = new FontFamily(textNode._fontFamily);
-                textBlock.FontFamily = fontFamily;
-            }
-
-            if (textNode._maxHeight.HasValue)
-            {
-                textBlock.MaxHeight = textNode._maxHeight.Value;
+                inline.FontFamily = fontFamily;
             }
         }
     }
